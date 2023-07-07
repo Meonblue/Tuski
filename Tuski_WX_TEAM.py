@@ -7,6 +7,7 @@ lz，cj无线组队脚本  BY.Tuski
         线程数： Tuski_WX_TEAM_thread 如未设置默认4线程
         车头数： Tuski_WX_TEAM_capainters 如未设置默认3车头
 TG: https://t.me/cooooooCC
+new Env('Tuski_组队');
 禁用就行 Tuski_WX_TEAM.py
 """
 
@@ -382,7 +383,8 @@ async def get_teaminfo(ck, session: aiohttp.ClientSession):
 
 @with_retries(max_tries=2, retries_sleep_second=0.5)
 async def get_ACinfo(cookie, session: aiohttp.ClientSession):
-    global code
+    global code,Message
+    Message=''
     jd_pin = re.findall('pt_pin=(.*?);', cookie)[0]
     token = await get_token(cookie)
     await refreshck(session)
