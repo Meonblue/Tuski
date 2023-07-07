@@ -6,6 +6,7 @@ lz，cj无线组队脚本  BY.Tuski
 环境变量 活动url： export Tuski_WX_TEAM="活动url"
         线程数： Tuski_WX_TEAM_thread 如未设置默认4线程
         车头数： Tuski_WX_TEAM_capainters 如未设置默认3车头
+        代理：Tuski_WX_TEAM_proxy 如未设置默认3车头
 TG: https://t.me/cooooooCC
 new Env('Tuski_组队');
 禁用就行 Tuski_WX_TEAM.py
@@ -692,7 +693,7 @@ if __name__ == '__main__':
         print("未设置车头数，默认3车头")
         Tuski_WX_TEAM_capainters= 3
     try:
-        Tuski_WX_TEAM_Proxy = os.environ.get("Tuski_proxy")
+        Tuski_WX_TEAM_Proxy = os.environ.get("Tuski_WX_TEAM_Proxy")
         print(f"代理Url：{Tuski_WX_TEAM_Proxy}")
     except Exception as e:
         print("未设置代理")
