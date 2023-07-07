@@ -568,7 +568,7 @@ async def taskmanager(task_sem, cookie, Url, mode, piece):
     host = re.findall('https?://((?:[\w-]+\.)+\w+(?::\d{1,5})?)', Url)[0]
     if mode == 1:
         now= datetime.datetime.now()
-        scheduler.add_job(proxy_sign, 'date', run_date=datetime.datetime(now.year, now.month, now.day, 2, 14, rate * 1),args=[Url, cookie, actId, jd_pin, host, piece])
+        scheduler.add_job(proxy_sign, 'date', run_date=datetime.datetime(now.year, now.month, now.day+1, 0, 0, rate * 1),args=[Url, cookie, actId, jd_pin, host, piece])
         # now = int(time.time())
         # await asyncio.sleep(zerotime - now + len(cookies) * 3)
     else:
