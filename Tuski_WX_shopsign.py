@@ -8,8 +8,8 @@ lz，cj无线签到脚本  BY.Tuski
         线程数： Tuski_WX_TEAM_thread 如未设置默认4线程
         车头数： Tuski_WX_TEAM_capainters 如未设置默认3车头
 TG: https://t.me/cooooooCC
-crone:   0 0 0 * * *
-
+crone:   2 45 23 * * *
+new Env('Tuski_无线签到');
 Tuski_WX_shopsign.py
 """
 
@@ -39,20 +39,14 @@ award_sign=[]
 logging.basicConfig(level=logging.WARNING, format='%(message)s')
 logging.getLogger('apscheduler').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
-logging.getLogger('apscheduler').setLevel(logging.WARNING)
-executors = {
-        'default': ThreadPoolExecutor(200),
-        'processpool': ProcessPoolExecutor(61)
-    }
+
 job_defaults = {
     'coalesce': False,
-    'max_instances': 20
+    'max_instances': 40
 }
 scheduler = AsyncIOScheduler(
-    executors=executors,
     job_defaults=job_defaults,
-    # timezone=utc,
-    timezone='Asia/Shanghai',
+    timezone='Asia/Shanghai'
 )
 
 async def cache_write():
@@ -562,6 +556,9 @@ async def async_sign(proxies, Url, cookie, actId, jd_pin, host, piece, session: 
         logger.warning(e)
 
 
+async def proxy_sign(Url, cookie, actId, jd_pin, host, piece):
+    proxies= await getproxy()
+    await async_sign(proxies, Url, cookie, actId, jd_pin, host, piece)
 
 async def taskmanager(task_sem, cookie, Url, mode, piece):
     # logger.warning(Url)
@@ -571,9 +568,9 @@ async def taskmanager(task_sem, cookie, Url, mode, piece):
     host = re.findall('https?://((?:[\w-]+\.)+\w+(?::\d{1,5})?)', Url)[0]
     if mode == 1:
         now= datetime.datetime.now()
-        scheduler.add_job(async_sign, 'date', run_date=datetime.datetime(now.year, now.month, now.day+1, 0, 0, rate * 2),args=[Url, cookie, actId, jd_pin, host, piece])
-        now = int(time.time())
-        await asyncio.sleep(zerotime - now + len(cookies) * 3)
+        scheduler.add_job(proxy_sign, 'date', run_date=datetime.datetime(now.year, now.month, now.day, 2, 14, rate * 1),args=[Url, cookie, actId, jd_pin, host, piece])
+        # now = int(time.time())
+        # await asyncio.sleep(zerotime - now + len(cookies) * 3)
     else:
         async with task_sem:
             proxies=await getproxy()
@@ -581,13 +578,13 @@ async def taskmanager(task_sem, cookie, Url, mode, piece):
 
 
 async def cookiemanager(Task_sem, Url, mode, piece):
-    task_sem = asyncio.Semaphore(2)
     task = []
+    task_sem = asyncio.Semaphore(20)
     async with Task_sem:
         for cookie in cookies:
             task.append(asyncio.create_task(taskmanager(task_sem, cookie, Url, mode, piece)))
             await asyncio.sleep(1)
-        await asyncio.wait(task)
+        await asyncio.gather(*task)
 
 
 
@@ -616,9 +613,9 @@ async def main():
     now = datetime.datetime.now()
     Sign_data = copy.deepcopy(sign_data)
     logger.warning(f'#'* 50)
-    if now.hour == 23 and now.minute >= 20:
-        Task_sem = len(Sign_data["data"])
-        logger.warning('距离两袋奶小于20分钟，执行定时模式')
+    if now.hour == 23 and now.minute >= 50:
+        Task_sem = asyncio.Semaphore(len(sign_data["data"]))
+        logger.warning('距离零点小于20分钟，执行定时模式')
         for Activity_info in sign_data["data"]:
             if str(Activity_info["signed_days"] + 1) in Activity_info["gifday"]:
                 piece = sign_data["data"].index(Activity_info)
@@ -627,6 +624,8 @@ async def main():
                 Url = Activity_info['activityUrl']
                 award_sign.append(Url)
                 Task.append(asyncio.create_task(cookiemanager(Task_sem, Url, mode, piece)))
+        await asyncio.gather(*Task)
+        scheduler.start()
         while True:
             if len(award_sign) == 0:
                 break
@@ -654,8 +653,8 @@ async def main():
             piece = sign_data["data"].index(Activity_info)
             Url = Activity_info['activityUrl']
             Task.append(asyncio.create_task(cookiemanager(Task_sem, Url, mode, piece)))
-            await asyncio.wait(Task)
-            await asyncio.sleep(1)
+        await asyncio.gather(*Task)
+
     await cache_write()
 
 
@@ -683,6 +682,6 @@ if __name__ == '__main__':
     task = []
     ua = UserAgent().random
     logger.warning("="*50)
-    thread = threading.Thread(target=getproxy, name="获取代理")
+    # thread = threading.Thread(target=getproxy, name="获取代理")
     loop= asyncio.get_event_loop()
     loop.run_until_complete(main())
