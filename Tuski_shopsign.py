@@ -5,6 +5,7 @@ Tuski_shopSign_token 活动token，多个请用 | 相隔
 TG: https://t.me/cooooooCC
 脚本会在距离第二天零点前五分钟自动定时，建议签到定时提前5分钟
 每天执行三四遍即可  防止断签
+new Env('Tuski_店铺签到');
 建议定时：
 2 55 8,23 * * * Tuski_shopsign.py
 """
