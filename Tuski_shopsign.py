@@ -7,10 +7,10 @@ TG: https://t.me/cooooooCC
 每天执行三四遍即可  防止断签
 new Env('Tuski_店铺签到');
 建议定时：
-2 55 8,23 * * * Tuski_shopsign.py
+2 57 8,23 * * * Tuski_shopsign.py
 """
 
-from urllib.parse import unquote_plus
+
 from fake_useragent import UserAgent
 from aiohttp import ClientSession
 import time
@@ -20,69 +20,16 @@ import datetime
 import os, sys, re
 from h5st31 import h5st31
 import aiohttp
-from functools import wraps
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import logging
 from Get_cookies import getck
-import requests
 from sendNotify import send
+from session import with_retries
 
 
 logging.basicConfig(level=logging.WARNING, format='%(message)s')
 logging.getLogger('apscheduler').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
-
-def session_manager(async_function):
-    @wraps(async_function)
-    async def wrapped(*args, **kwargs):
-        headers= {
-            "User-Agent": ua
-        }
-        session = aiohttp.ClientSession(headers=headers)
-        try:
-            return await async_function(session=session, *args, **kwargs)
-        except aiohttp.ClientError as e:
-            raise e
-        finally:
-            await session.close()
-    return wrapped
-
-
-def with_retries(max_tries, retries_sleep_second):
-    def wrapper(function):
-        @wraps(function)
-        @session_manager
-        async def async_wrapped(*args, **kwargs):
-            tries = 1
-            while tries <= max_tries:
-                try:
-                    return await function(*args, **kwargs)
-                except (asyncio.exceptions.TimeoutError, aiohttp.ClientError) as e:
-                    logger.warning(f"Function: {function.__name__} Caused AiohttpError: {str(e)}, tries: {tries}")
-                    tries += 1
-                    await asyncio.sleep(retries_sleep_second)
-            else:
-                raise TimeoutError("Reached aiohttp max tries")
-
-        @wraps(function)
-        def wrapped(*args, **kwargs):
-            tries = 1
-            while tries <= max_tries:
-                try:
-                    return function(*args, **kwargs)
-                except requests.exceptions.RequestException as e:
-                    logger.warning(f"Function: {function.__name__} Caused RequestsError: {str(e)}, tries: {tries}")
-                    tries += 1
-                    time.sleep(retries_sleep_second)
-            else:
-                raise TimeoutError("Reached aiohttp max tries")
-
-        if asyncio.iscoroutinefunction(function):
-            return async_wrapped
-        else:
-            return wrapped
-    return wrapper
-
 
 
 async def jdtime():
