@@ -6,7 +6,7 @@ lz，cj无线组队脚本  BY.Tuski
 环境变量 活动url： export Tuski_WX_TEAM="活动url"
         线程数： Tuski_WX_TEAM_thread 如未设置默认4线程
         车头数： Tuski_WX_TEAM_capainters 如未设置默认3车头
-        代理：Tuski_WX_TEAM_Proxy 如未设置默认3车头
+        代理：Tuski_WX_TEAM_proxy 如未设置默认3车头
 TG: https://t.me/cooooooCC
 new Env('Tuski_组队');
 禁用就行 Tuski_WX_TEAM.py
@@ -17,64 +17,13 @@ import aiohttp, requests
 import json, re, os, sys, time
 from asgetoken import getoken
 from urllib.parse import quote_plus, unquote_plus
-from functools import wraps
 import threading
 import telnetlib
 from Get_cookies import getck
 from sendNotify import send
+from session import with_retries
 
 
-def session_manager(async_function):
-    @wraps(async_function)
-    async def wrapped(*args, **kwargs):
-        timeout = aiohttp.ClientTimeout(total=3, connect=3, sock_connect=3, sock_read=3)
-        con = aiohttp.TCPConnector(ssl=False)
-        session = aiohttp.ClientSession(trust_env=True, timeout=timeout, connector=con)
-        try:
-            return await async_function(session=session, *args, **kwargs)
-        except aiohttp.ClientError as e:
-            raise e
-        finally:
-            await session.close()
-
-    return wrapped
-
-
-def with_retries(max_tries, retries_sleep_second):
-    def wrapper(function):
-        @wraps(function)
-        @session_manager
-        async def async_wrapped(*args, **kwargs):
-            tries = 1
-            while tries <= max_tries:
-                try:
-                    return await function(*args, **kwargs)
-                except asyncio.exceptions.TimeoutError as e:
-                    print(f"Function: {function.__name__} Caused AiohttpError: {str(e)}, tries: {tries}")
-                    tries += 1
-                    await asyncio.sleep(retries_sleep_second)
-            else:
-                raise TimeoutError("Reached aiohttp max tries")
-
-        @wraps(function)
-        def wrapped(*args, **kwargs):
-            tries = 1
-            while tries <= max_tries:
-                try:
-                    return function(*args, **kwargs)
-                except requests.exceptions.RequestException as e:
-                    print(f"Function: {function.__name__} Caused RequestsError: {str(e)}, tries: {tries}")
-                    tries += 1
-                    time.sleep(retries_sleep_second)
-            else:
-                raise TimeoutError("Reached aiohttp max tries")
-
-        if asyncio.iscoroutinefunction(function):
-            return async_wrapped
-        else:
-            return wrapped
-
-    return wrapper
 
 def getproxy():
     global proxies,get_proxy_time,IP,port
@@ -548,7 +497,6 @@ async def jointeam(cookie, signUuid, session: aiohttp.ClientSession):
 
 
 async def main():
-
     if Tuski_WX_TEAM_Proxy == "None":
         pass
     else:
