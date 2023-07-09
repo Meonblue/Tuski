@@ -18,21 +18,18 @@ import os.path
 import sys
 import copy
 import aiofiles
-import aiohttp, requests
+import aiohttp
 import json, re, time
 from time import localtime
 from asgetoken import getoken
 from urllib.parse import quote_plus, unquote_plus
-from functools import wraps
-import threading
 import telnetlib
 from Get_cookies import getck
 from fake_useragent import UserAgent
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sendNotify import send
-from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
-
+from session import with_retries
 
 award_sign=[]
 logging.basicConfig(level=logging.WARNING, format='%(message)s')
@@ -71,61 +68,6 @@ def read_cache():
             sign_data = {'data': []}
             f.write(json.dumps(sign_data))
             return sign_data
-
-def session_manager(async_function):
-    @wraps(async_function)
-    async def wrapped(*args, **kwargs):
-        timeout = aiohttp.ClientTimeout(total=3, connect=3, sock_connect=3, sock_read=3)
-        con = aiohttp.TCPConnector(ssl=False)
-        session = aiohttp.ClientSession(trust_env=True, timeout=timeout, connector=con)
-        try:
-            return await async_function(session=session, *args, **kwargs)
-        except aiohttp.ClientError as e:
-            logger.warning(e)
-            pass
-        finally:
-            await session.close()
-
-    return wrapped
-
-
-def with_retries(max_tries, retries_sleep_second):
-    def wrapper(function):
-        @wraps(function)
-        @session_manager
-        async def async_wrapped(*args, **kwargs):
-            tries = 1
-            while tries <= max_tries:
-                try:
-                    return await function(*args, **kwargs)
-                except asyncio.exceptions.TimeoutError as e:
-                    logger.warning(f"Function: {function.__name__} Caused AiohttpError: {str(e)}, tries: {tries}")
-                    tries += 1
-                    await asyncio.sleep(retries_sleep_second)
-            else:
-                logger.warning('重试超上限')
-                pass
-
-        @wraps(function)
-        def wrapped(*args, **kwargs):
-            tries = 1
-            while tries <= max_tries:
-                try:
-                    return function(*args, **kwargs)
-                except requests.exceptions.RequestException as e:
-                    logger.warning(f"Function: {function.__name__} Caused RequestsError: {str(e)}, tries: {tries}")
-                    tries += 1
-                    time.sleep(retries_sleep_second)
-            else:
-                raise TimeoutError("Reached aiohttp max tries")
-
-        if asyncio.iscoroutinefunction(function):
-            return async_wrapped
-        else:
-            return wrapped
-
-    return wrapper
-
 
 
 async def getproxy():
@@ -177,8 +119,8 @@ def checkproxy():
                 break
 
 
-@session_manager
-async def jdtime(session):  # 京东当前时间
+@with_retries(max_tries=2, retries_sleep_second=1)
+async def jdtime(session: aiohttp.ClientSession):  # 京东当前时间
     res = await session.get(url='https://sgm-m.jd.com/h5/', headers={
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36'})
     text = await res.text()
@@ -496,12 +438,19 @@ async def async_sign(proxies, Url, cookie, actId, jd_pin, host, piece, session: 
                         logger.warning(msg)
                         send(title='WX_shopsign', content=Msg)
                         return
-
                 else:
-                    msg = f"{jd_pin}签到失败：{sign_Info['msg']}"
-                    Msg += f'{msg}\n'
-                    logger.warning(msg)
-                    send(title='WX_shopsign', content=Msg)
+                    if '当天只允许签到一次' in sign_Info['msg']:
+                        logger.warning(f'{jd_pin}: {Url}今日已签')
+                        if cookie == cookies[0]:
+                            sign_data["data"][piece]['signed_days'] += 1
+                            sign_data["data"][piece]['lastsigned'] = now
+                    else:
+                        msg = f"{jd_pin}签到失败：{sign_Info['msg']}"
+                        Msg += f'{msg}\n'
+                        logger.warning(msg)
+                        send(title='WX_shopsign', content=Msg)
+            else:
+                logger.warning(f'{jd_pin} ： {Url} 签到请求失败')
         sign_Info = await getSignInfo(Url, proxies, actId, secretPin, venderId, host, session)
         if sign_Info!= False:
             signed_days= sign_Info['signRecord']['contiSignNum']
