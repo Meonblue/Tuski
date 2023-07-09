@@ -76,7 +76,7 @@ def checkproxy():
                 break
 
 
-@session_manager
+@with_retries(max_tries=2, retries_sleep_second=0.5)
 async def jdtime(session):  # 京东当前时间
     res = await session.get(url='https://sgm-m.jd.com/h5/', headers={
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36'})
