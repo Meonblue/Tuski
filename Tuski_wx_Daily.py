@@ -70,13 +70,16 @@ class daily:
         res=await session.post(url,headers=headers, data= json.dumps(data))
         if res.status == 200 :
             try:
+                global shopName
                 res_json= await res.json()
+                shopName= res_json["data"]["shopName"]
                 Token= res_json["data"]["token"]
                 return Token
             except  Exception as e:
                 logger.warning(f'Token请求失败:{e}')
         else:
             logger.warning(f'Token请求失败: 403')
+            raise asyncio.TimeoutError
 
 
     async def get_Activity(self, Token, session: aiohttp.ClientSession):
@@ -96,13 +99,17 @@ class daily:
                 logger.warning(f'请求Activity失败: {e}')
         else:
             logger.warning(f'请求Activity失败: 403')
+            raise TimeoutError
 
 
-    async def dayReceive(self, Token, prizeInfoId, session: aiohttp.ClientSession):
+    @with_retries(max_tries=3, retries_sleep_second=0.2)
+    async def dayReceive(self, Token, prizeInfoId,  session: aiohttp.ClientSession):
+        # jd_pin = unquote_plus(re.findall('pt_pin=(.*?);', self.cookie)[0])
+        # ua = UserAgent().random
         url = 'https://lzkj-isv.isvjcloud.com/prod/cc/interactsaas/api/task/dailyGrabs/dayReceive'
         headers = {
             'Content-Type': 'application/json;charset=UTF-8',
-            'Referer': self.ActivityUrl,
+            'Referer': ActivityUrl,
             'User-Agent': self.ua,
             'Token': Token
         }
@@ -113,7 +120,8 @@ class daily:
         if res.status == 200:
             try:
                 res_json = await res.json()
-                if res_json["data"]["result"] ==True:
+                # print(res_json)
+                if "data" in str(res_json):
                     meg= f'{self.jd_pin}获得{res_json["data"]["prizeName"]}'
                     logger.warning(meg)
                     send('Tuski_100抢豆豆', meg)
@@ -124,12 +132,14 @@ class daily:
             except Exception as e:
                 logger.warning(f'请求Activity失败: {e}')
         else:
-            logger.warning(f'请求Activity失败: 403')
+            logger.warning(f'请求抢豆失败: 403')
+            raise asyncio.TimeoutError
         if self.cookie in Ing:
             Ing.remove(self.cookie)
 
+
 @with_retries(max_tries=2, retries_sleep_second=1)
-async def Taskmanager(cookie,session: aiohttp.ClientSession):
+async def Taskmanager(cookie, session: aiohttp.ClientSession):
     Daily= daily(cookie, ActivityUrl)
     Token= await Daily.get_Token(session)
     if Token != None:
@@ -144,7 +154,7 @@ async def Taskmanager(cookie,session: aiohttp.ClientSession):
             startTime_c = time.localtime(startTime)
             endTime_c = time.localtime(endTime)
             lotteryTime_c= time.localtime(lotteryTime)
-            mes= f'每日抢：{ActivityUrl}\n奖品：{prizeName}\n开始时间：{time.strftime("%Y-%m-%d %H:%M:%S", startTime_c)}\n结束时间：{time.strftime("%Y-%m-%d %H:%M:%S", endTime_c)}\n本轮开抢时间：{time.strftime("%Y-%m-%d %H:%M:%S", lotteryTime_c)}\n数量：{surplusDayNum}份'
+            mes= f'每日抢：{ActivityUrl}\n店铺：{shopName}\n奖品：{prizeName}\n开始时间：{time.strftime("%Y-%m-%d %H:%M:%S", startTime_c)}\n结束时间：{time.strftime("%Y-%m-%d %H:%M:%S", endTime_c)}\n本轮开抢时间：{time.strftime("%Y-%m-%d %H:%M:%S", lotteryTime_c)}\n数量：{surplusDayNum}份'
             logger.warning(mes)
             now= int(time.time())
             if now > endTime:
@@ -157,25 +167,29 @@ async def Taskmanager(cookie,session: aiohttp.ClientSession):
                 mes += f'\n\n{Msg}'
                 logger.warning(Msg)
                 return mes
-            if  now + 480 > lotteryTime > now:
+            if now + 480 > lotteryTime  > now:
                 Msg = f'活动将于{lotteryTime-now}秒开始, 定时ing'
                 mes += f'\n\n{Msg}'
                 logger.warning(Msg)
                 send('Tuski_100抢豆豆', mes)
                 start_time = datetime.fromtimestamp(lotteryTime)
-                scheduler.add_job(Daily.dayReceive, 'date',run_date=(start_time.year,start_time.month,start_time.day,start_time.hour,start_time.minute,start_time.second), args=[Token, prizeInfoId, session])
+                scheduler.add_job(daily(cookie, ActivityUrl).dayReceive, 'date', run_date=start_time, args=[Token, prizeInfoId])
                 Ing.append(cookie)
             else:
                 logger.warning(f'开抢时间大于8分钟， pass')
     return
 
+
 async def main():
+    if ActivityUrl == None:
+        return
     Task= []
     await Taskmanager(cookies[0])
     if len(Ing) != 0:
-        for cookie in cookies[1-9]:
+        for cookie in cookies[1:9]:
             Task.append(asyncio.create_task(Taskmanager(cookie)))
-        await asyncio.wait(Task)
+        await asyncio.gather(*Task)
+        scheduler.start()
         while True:
             if len(Ing) == 0:
                 break
