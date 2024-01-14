@@ -6,13 +6,18 @@ from urllib.parse import unquote_plus
 from session import with_retries
 
 
+try:
+    api= os.environ.get("Tuski_sign")
+except:
+    print('当前未设置sign地址, Tuski_sign')
+    raise ValueError
+
 @with_retries(max_tries=2, retries_sleep_second=1)
 async def getoken(cookie, functionId, body, proxies, session: aiohttp.ClientSession):
     jd_pin = unquote_plus(re.findall('pt_pin=(.*?);', cookie)[0])
     UA = UserAgent().random
     async def get_token():
         try:
-            api = "http://192.168.100.8:9090/api/jdsign"
             sign_data = {
                 "fn": functionId,
                 "body": body
