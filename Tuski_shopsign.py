@@ -1,6 +1,6 @@
 """
 20 店铺签到  BY.Tuski
-版本： 2.0
+版本： 3.0
 Tuski_shopSign_token 活动token，多个请用 | 相隔
 TG: https://t.me/cooooooCC
 脚本会在距离第二天零点前五分钟自动定时，建议签到定时提前5分钟
@@ -9,8 +9,7 @@ new Env('Tuski_店铺签到');
 建议定时：
 2 57 8,23 * * * Tuski_shopsign.py
 """
-
-
+import calendar
 from fake_useragent import UserAgent
 from aiohttp import ClientSession
 import time
@@ -18,7 +17,6 @@ import json
 import asyncio
 import datetime
 import os, sys, re
-from h5st31 import h5st31
 import aiohttp
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import logging
@@ -26,10 +24,10 @@ from Get_cookies import getck
 from sendNotify import send
 from session import with_retries
 
-
 logging.basicConfig(level=logging.WARNING, format='%(message)s')
 logging.getLogger('apscheduler').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
+Msg = []
 
 
 async def jdtime():
@@ -47,7 +45,31 @@ async def jdtime():
 
 
 async def get_h5st(pin, functionId, body):
-    new_h5st31 = h5st31({
+    data = {
+        "token": "ClientSession",
+        "appId": "4da33",  # h5st里面的appId
+        "appid": "interCenter_shopSign",
+        "pin": pin,
+        "functionId": functionId,
+        "body": body,
+        "clientVersion": "6.0.0",
+        "client": "android",
+        "version": "4.1",
+    }
+    headers = {
+        'Host': '192.168.100.8:9090',
+        'Content-Type': 'application/json',
+    }
+    async with aiohttp.ClientSession() as session:
+        res = await session.post(url=Tuski_h5st_api, headers=headers, data=json.dumps(data))
+    text = await res.json()
+    H5st = text['data']
+    # print(H5st)
+    return H5st
+
+
+"""new_h5st = H5st(ua, pin, logger)
+    H5st({
         'appId': '4da33',  # h5st里面的appId
         "appid": "interCenter_shopSign",
         "clientVersion": "1.2.5",
@@ -55,13 +77,13 @@ async def get_h5st(pin, functionId, body):
         "pin": pin,
         "ua": ua
     })
-    new_h5st31.genAlgo()
-    h5st= new_h5st31.getbody(functionId, body, code=True)
-    return h5st
+    h5st= new_h5st.encrypt(appId= '4da33', functionId=functionId, body=body, appid= "interCenter_shopSign", client="android", clientVersion= "1.2.5", t=None, version= "4.1")
+    return h5st"""
 
 
 @with_retries(max_tries=5, retries_sleep_second=0)
 async def getvenderId(token, session):
+    # await asyncio.sleep(5)
     functionId = 'interact_center_shopSign_getActivityInfo'
     body = {"token": token, "venderId": ""}
     pin = re.findall('pt_pin=(.*?);', CookieJDs[0])[0]
@@ -70,18 +92,19 @@ async def getvenderId(token, session):
         "referer": 'https://h5.m.jd.com/'
     }
     # appid= "interCenter_shopSign"
-    h5st= await get_h5st(pin, functionId, body)
+    h5st = await get_h5st(pin, functionId, body)
     url = f'https://api.m.jd.com/api?{h5st}'
-    response=await session.get(url=url, headers=headers)
+    response = await session.get(url=url, headers=headers)
     if response.status == 200:
-        text = await response.text()
-        r = json.loads(text)
+        r = await response.json()
+        # print(r)
         if '当前不存在' in r:
             logger.warning('当前不存在有效的活动，删除!')
         else:
             l = []
             days = []
             try:
+                # print(r["data"]["continuePrizeRuleList"])
                 for i in r["data"]["continuePrizeRuleList"]:
                     for x in i["prizeList"]:
                         day = i["days"]
@@ -128,7 +151,7 @@ async def getSignRecord(token, venderId, activityId, stimestamp, days, session):
         "cookie": CookieJDs[0],
         "referer": f'https://h5.m.jd.com/babelDiy/Zeus/2PAAf74aG3D61qvfKUM5dxUssJQ9/index.html?token={token}&sceneval=2&jxsid=16105853541009626903&cu=true&utm_source=kong&utm_medium=jingfen&utm_campaign=t_1001280291_&utm_term=fa3f8f38c56f44e2b4bfc2f37bce9713',
     }
-    response=await session.get(url=url, headers=headers)
+    response = await session.get(url=url, headers=headers)
     d = await response.json()
     day = d["data"]["days"]
     logger.warning(f'当前token：{token}  已签{day}天')
@@ -142,7 +165,7 @@ async def getSignRecord(token, venderId, activityId, stimestamp, days, session):
         efficienttoken["data"].remove(
             {"token": token, "venderId": venderId, "activityId": activityId, "stimestamp": stimestamp,
              "awardays": days})
-    elif day+2 < besignday:
+    elif day + 2 < besignday:
         logger.warning(f'当前token：{token} 中途有断签到，跳过')
         efficienttoken["data"].remove(
             {"token": token, "venderId": venderId, "activityId": activityId, "stimestamp": stimestamp,
@@ -162,9 +185,9 @@ async def signCollectGift(cookie, token, venderId, activityId, session):
     }
     retry = 0
     while retry < retrys:
-        response= await session.get(url=url, headers=headers, timeout=0.5)
+        response = await session.get(url=url, headers=headers, timeout=0.5)
         try:
-            json_data= await response.json()
+            json_data = await response.json()
         except Exception as e:
             logger.warning(f'第{retry}次签到失败')
             retry = retry + 1
@@ -183,15 +206,17 @@ async def signCollectGift(cookie, token, venderId, activityId, session):
                     for i in awards:
                         for X in i["prizeList"]:
                             if X["type"] == 6:
-                                logger.warning(f'获得奖励： 获得{int(X["discount"])} 积分')
+                                msg = f'{pin}获得奖励： 获得{int(X["discount"])} 积分\n'
                             elif X["type"] == 4:
-                                logger.warning(f'获得奖励： 获得{int(X["discount"])} 豆')
+                                msg = f'{pin}获得奖励： 获得{int(X["discount"])} 豆\n'
                             elif X["type"] == 14:
-                                logger.warning(f'获得奖励： 获得{int(X["discount"])} 红包')
+                                msg = f'{pin}获得奖励： 获得{int(X["discount"])} 红包\n'
                             elif X["type"] == 10:
-                                logger.warning(f'获得奖励： 获得{int(X["discount"])} E卡')
+                                msg = f'{pin}获得奖励： 获得{int(X["discount"])} E卡\n'
                             else:
-                                logger.warning("不知道获取了啥子奖励")
+                                msg = "不知道获取了啥子奖励\n"
+                            Msg.append(msg)
+                            logger.warning(msg)
             elif json_data["code"] == 403030023:
                 logger.warning(f'token：{token} 今天已签过到')
             elif "未登录" in json_data:
@@ -204,6 +229,7 @@ async def signCollectGift(cookie, token, venderId, activityId, session):
     else:
         logger.warning(f'签到重试超过{retrys}次，退出签到')
 
+
 @with_retries(max_tries=5, retries_sleep_second=0)
 async def async_signCollectGift(cookie, token, h5st, pin, session):
     pin = re.findall('pt_pin=(.*?);', cookie)[0]
@@ -214,9 +240,9 @@ async def async_signCollectGift(cookie, token, h5st, pin, session):
     }
     retry = 0
     while retry < retrys:
-        response= await session.get(url=url, headers=headers, timeout=0.5)
+        response = await session.get(url=url, headers=headers, timeout=0.5)
         try:
-            json_data= await response.json()
+            json_data = await response.json()
         except Exception as e:
             logger.warning(f'第{retry}次签到失败')
             retry = retry + 1
@@ -235,16 +261,16 @@ async def async_signCollectGift(cookie, token, h5st, pin, session):
                     for i in awards:
                         for X in i["prizeList"]:
                             if X["type"] == 6:
-                                msg= f'{pin}获得奖励： 获得{int(X["discount"])} 积分'
+                                msg = f'{pin}获得奖励： 获得{int(X["discount"])} 积分\n'
                             elif X["type"] == 4:
-                                msg = f'{pin}获得奖励： 获得{int(X["discount"])} 豆'
+                                msg = f'{pin}获得奖励： 获得{int(X["discount"])} 豆\n'
                             elif X["type"] == 14:
-                                msg = f'{pin}获得奖励： 获得{int(X["discount"])} 红包'
+                                msg = f'{pin}获得奖励： 获得{int(X["discount"])} 红包\n'
                             elif X["type"] == 10:
-                                msg = f'{pin}获得奖励： 获得{int(X["discount"])} E卡'
+                                msg = f'{pin}获得奖励： 获得{int(X["discount"])} E卡\n'
                             else:
-                                msg = "不知道获取了啥子奖励"
-                            Msg += msg
+                                msg = "不知道获取了啥子奖励\n"
+                            Msg.append(msg)
                             logger.warning(msg)
             elif json_data["code"] == 403030023:
                 logger.warning(f'token：{token} 今天已签过到')
@@ -260,14 +286,13 @@ async def async_signCollectGift(cookie, token, h5st, pin, session):
 
 
 async def main():
-    global Msg
-    Msg = ''
     tasks = []
     for i in tokens:
         done = await getvenderId(i)
         if done != None:
             efficienttoken["data"].append(
-                {"token": done[0], "venderId": done[1], "activityId": done[2], "stimestamp": done[3], "awardays": done[4]})
+                {"token": done[0], "venderId": done[1], "activityId": done[2], "stimestamp": done[3],
+                 "awardays": done[4]})
             await asyncio.sleep(0.5)
         else:
             pass
@@ -283,13 +308,14 @@ async def main():
         logger.warning("当前无有奖励签到，跳出并发签到")
     else:
         now = datetime.datetime.now()
+        mouth_days = calendar.monthrange(now.year, now.month)[1]
         if now.hour == 23 and now.minute >= 57:
             logger.warning(f"即将并发签到{len(awardsign['data'])}个token")
             for v in awardsign["data"]:
                 logger.warning(v["token"])
             now = datetime.datetime.now()
-            logger.warning(f'当前时间：{now},{60-now.minute}分{60-now.second}秒之后执行签到\n'+ '='*60)
-            rate=0
+            logger.warning(f'当前时间：{now},{60 - now.minute}分{60 - now.second}秒之后执行签到\n' + '=' * 60)
+            rate = 0
             for cookie in CookieJDs:
                 pin = re.findall('pt_pin=(.*?);', cookie)[0]
                 for be_signd_token in awardsign["data"]:
@@ -297,17 +323,25 @@ async def main():
                     venderId = be_signd_token["venderId"]
                     activityId = be_signd_token["activityId"]
                     functionId = 'interact_center_shopSign_signCollectGift'
-                    body = {"token": token, "venderId": f"{venderId}", "activityId": f"{activityId}", "type": 56,"actionType": 7}
-                    h5st= await get_h5st(pin, functionId, body)
-                    scheduler.add_job(async_signCollectGift, 'date', run_date=datetime.datetime(now.year, now.month, now.day+1, 0, 0, rate * 2),args=[cookie, token, h5st, pin])
-                    time.sleep(2)
+                    body = {"token": token, "venderId": f"{venderId}", "activityId": f"{activityId}", "type": 56,
+                            "actionType": 7}
+                    h5st = await get_h5st(pin, functionId, body)
+                    if int(now.month) == int(mouth_days):
+                        scheduler.add_job(async_signCollectGift, 'date',
+                                          run_date=datetime.datetime(now.year, now.month + 1, 1, 0, 0, rate * 2),
+                                          args=[cookie, token, h5st, pin])
+                    else:
+                        scheduler.add_job(async_signCollectGift, 'date',
+                                          run_date=datetime.datetime(now.year, now.month, now.day + 1, 0, 0, rate * 2),
+                                          args=[cookie, token, h5st, pin])
+
                 rate = rate + 1
             scheduler.start()
             while True:
                 logger.warning(f"-----即将并发签到 1-{len(CookieJDs)} 账号----------")
-                now= int(time.time())
-                await asyncio.sleep(zerotime- now + 20)
-                logger.warning("="* 59)
+                now = int(time.time())
+                await asyncio.sleep(zerotime - now + 20)
+                logger.warning("=" * 59)
                 break
         else:
             logger.warning('当前时间距离零点大于半小时，执行常规签到')
@@ -330,25 +364,32 @@ async def main():
                 await signCollectGift(cookie, token, venderId, activityId)
                 await asyncio.sleep(1)
             Rate += 1
-    send('Tuski_店签',Msg)
+
+    symbo = ''
+    send('Tuski_店签', symbo.join(Msg))
     return
 
 
 if __name__ == '__main__':
-
     scheduler = AsyncIOScheduler(timezone='Asia/Shanghai')
     timeout = aiohttp.ClientTimeout()
     ua = UserAgent().random
     CookieJDs = getck()
-    zerotime= int(time.mktime(datetime.date.today().timetuple())) + 86400
+    zerotime = int(time.mktime(datetime.date.today().timetuple())) + 86400
+    try:
+        Tuski_h5st_api = os.environ.get("Tuski_h5st_api")
+    except Exception as e:
+        logger.warning('未设置 Tuski_h5st_api')
+        sys.exit()
     try:
         tokens = os.environ.get("Tuski_shopSign_token").split('|')
     except Exception as e:
         logger.warning(f"获取tokens失败：{e}")
         sys.exit()
+
     retrys = 5  # 重试次数
     efficienttoken = {"data": []}
     awardsign = {"data": []}
     general = {"data": []}
-    loop= asyncio.get_event_loop()
+    loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
