@@ -282,10 +282,12 @@ class wx_Team:
             }
             res = await self.session.post('https://api.m.jd.com/', headers=headers, params=params)
             text = await res.text()
+            if "稍后再试" in text:
+                logger.warning(f"{self.jd_pin}入会失败: 火爆")
+                return False
             res_json = json.loads(text)
             if res_json['success']:
                 logger.warning(f"{self.jd_pin}入会成功")
-                logger.warning(res_json)
                 return True
         except Exception as e:
             logger.warning(f"{self.jd_pin}入会失败: {e}")
@@ -472,7 +474,7 @@ async def jointeam(cookie, signUuid, proxies, session):
                         cookies.append(cookie)
                         return "该车队已满员，跳过执行"
                     else:
-                        logger.warning(res_json["errorMessage"])
+                        logger.warning(f'{jd_pin}入队失败： {res_json["errorMessage"]}')
                         return False
                 elif res_json["data"][0]["nickName"]:
                     logger.warning(f'{jd_pin}加入{res_json["data"][0]["nickName"]}队伍成功')
@@ -647,7 +649,7 @@ async def main():
     symbo = ''
     send('兔斯基组队', symbo.join(Msg))
 
-    
+
 
 if __name__ == '__main__':
     try:
